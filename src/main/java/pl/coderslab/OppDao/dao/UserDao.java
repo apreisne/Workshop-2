@@ -7,6 +7,7 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Arrays;
+import java.util.Optional;
 
 import static pl.coderslab.OppDao.utils.DbUtil.getConnection;
 
@@ -18,6 +19,7 @@ public class UserDao {
     private static final String UPDATE_SQL = "UPDATE users SET username=?, email=?, password=? WHERE id=?";
     private static final String GET_ALL_SQL = "SELECT * FROM users";
     private static final String DELETE_SQL = "DELETE FROM users WHERE id=?";
+    private static final String DELETE_ALL = "TRUNCATE TABLE users";
 
     private UserDao() {
     }
@@ -25,6 +27,21 @@ public class UserDao {
     public static UserDao getInstance() {
 
         return INSTANCE;
+    }
+
+
+    public boolean isPasswordCorrect(String password) {
+
+        var hashed = BCrypt.hashpw(password, BCrypt.gensalt());
+        return BCrypt.checkpw(password, hashed);
+    }
+
+    public void deleteAll() throws SQLException {
+
+        try (var preparedStatement = getConnection().prepareStatement(DELETE_ALL)) {
+            preparedStatement.executeUpdate();
+            System.out.println("All users deleted");
+        }
     }
 
     public User[] findAll() {
@@ -89,7 +106,7 @@ public class UserDao {
     }
 
 
-    public User read(Long id) {
+    public Optional<User> read(Long id) {
 
         try (var preparedStatement = getConnection().prepareStatement(GET_USER_SQL)) {
 
@@ -101,13 +118,13 @@ public class UserDao {
                 user.setId(rs.getLong("id"));
                 user.setUsername(rs.getString("username"));
                 user.setEmail(rs.getString("email"));
-                return user;
+                return Optional.of(user);
             }
 
         } catch (SQLException e) {
             System.err.println(e.getMessage());
         }
-        return null;
+        return Optional.empty();
     }
 
     public User create(User user) {
