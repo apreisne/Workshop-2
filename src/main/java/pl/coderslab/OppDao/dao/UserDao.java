@@ -1,4 +1,148 @@
 package pl.coderslab.OppDao.dao;
 
+import org.mindrot.jbcrypt.BCrypt;
+import pl.coderslab.OppDao.entity.User;
+
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.Arrays;
+
+import static pl.coderslab.OppDao.utils.DbUtil.getConnection;
+
 public class UserDao {
+
+    private static final UserDao INSTANCE = new UserDao();
+    private static final String INSERT_SQL = "INSERT INTO users(username, email, password) VALUES(?,?,?)";
+    private static final String GET_USER_SQL = "SELECT id, username, email FROM users WHERE id=?";
+    private static final String UPDATE_SQL = "UPDATE users SET username=?, email=?, password=? WHERE id=?";
+    private static final String GET_ALL_SQL = "SELECT * FROM users";
+    private static final String DELETE_SQL = "DELETE FROM users WHERE id=?";
+
+    private UserDao() {
+    }
+
+    public static UserDao getInstance() {
+
+        return INSTANCE;
+    }
+
+    public User[] findAll() {
+
+        User[] users = new User[0];
+
+        try (var preparedStatement = getConnection().prepareStatement(GET_ALL_SQL)) {
+
+            preparedStatement.execute();
+            var resultSet = preparedStatement.getResultSet();
+            while (resultSet.next()) {
+
+                var user = new User();
+                user.setId(resultSet.getLong("id"));
+                user.setUsername(resultSet.getString("username"));
+                user.setEmail(resultSet.getString("email"));
+
+                users = addToArray(users, user);
+            }
+
+        } catch (SQLException e) {
+            System.err.println(e.getMessage());
+        }
+
+        return users;
+    }
+
+    public User[] addToArray(User[] users, User user) {
+
+        User[] expanded = Arrays.copyOf(users, users.length + 1);
+        expanded[expanded.length - 1] = user;
+        return expanded;
+    }
+
+    public void delete(Long id) {
+
+        try (var preparedStatement = getConnection().prepareStatement(DELETE_SQL)) {
+
+            preparedStatement.setLong(1, id);
+            preparedStatement.executeUpdate();
+            System.out.printf("User with ID %d deleted%n", id);
+
+        } catch (SQLException e) {
+            System.err.println(e.getMessage());
+        }
+    }
+
+    public void updateUser(User user) {
+
+        try (var preparedStatement = getConnection().prepareStatement(UPDATE_SQL)) {
+
+            preparedStatement.setString(1, user.getUsername());
+            preparedStatement.setString(2, user.getEmail());
+            preparedStatement.setString(3, hashPassword(user.getPassword()));
+            preparedStatement.setLong(4, user.getId());
+            preparedStatement.executeUpdate();
+            System.out.printf("User with ID %d updated%n", user.getId());
+
+        } catch (SQLException e) {
+            System.err.println(e.getMessage());
+        }
+    }
+
+
+    public User read(Long id) {
+
+        try (var preparedStatement = getConnection().prepareStatement(GET_USER_SQL)) {
+
+            preparedStatement.setLong(1, id);
+            var rs = preparedStatement.executeQuery();
+
+            var user = new User();
+            while (rs.next()) {
+                user.setId(rs.getLong("id"));
+                user.setUsername(rs.getString("username"));
+                user.setEmail(rs.getString("email"));
+                return user;
+            }
+
+        } catch (SQLException e) {
+            System.err.println(e.getMessage());
+        }
+        return null;
+    }
+
+    public User create(User user) {
+
+        try (var preparedStatement = getConnection().prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS);) {
+
+            preparedStatement.setString(1, user.getUsername());
+            preparedStatement.setString(2, user.getEmail());
+            preparedStatement.setString(3, hashPassword(user.getPassword()));
+            preparedStatement.executeUpdate();
+
+            returnInsertedId(preparedStatement, user);
+
+        } catch (SQLException e) {
+
+            System.err.println(e.getMessage());
+
+        }
+        return user;
+    }
+
+    public String hashPassword(String password) {
+
+        return BCrypt.hashpw(password, BCrypt.gensalt());
+    }
+
+    public void returnInsertedId(PreparedStatement preparedStatement, User user) throws SQLException {
+
+        var rs = preparedStatement.getGeneratedKeys();
+        if (rs.next()) {
+
+            long id = rs.getLong(1);
+            user.setId(id);
+            System.out.println("Inserted ID: " + id);
+        }
+    }
+
 }
